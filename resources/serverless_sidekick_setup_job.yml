@@ -16,9 +16,10 @@ resources:
 
       tasks:
         - task_key: notebook_task
-          job_cluster_key: job_cluster
+          # job_cluster_key: job_cluster
           notebook_task:
             notebook_path: ../src/0-uc-setup.sql
+          warehouse_id: ${var.warehouse_id}
           
         
       # job_clusters:
