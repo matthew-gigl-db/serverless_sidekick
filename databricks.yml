@@ -16,6 +16,8 @@ targets:
     default: true
     workspace:
       host: https://e2-demo-field-eng.cloud.databricks.com
+    variables:  
+      warehouse_id: 475b94ddc7cd5211
 
   prod:
     mode: production
@@ -26,5 +28,15 @@ targets:
     permissions:
       - user_name: matthew.giglia@databricks.com
         level: CAN_MANAGE
+      - user_name: emma.yamada@databricks.com
+        level: CAN_MANAGE
     run_as:
       user_name: matthew.giglia@databricks.com
+    variables:  
+      warehouse_id: 475b94ddc7cd5211
+
+
+variables:
+  warehouse_id:
+    description: A Databricks SQL Warehouse ID to Use for SQL Notebooks or Files 
+    default: 475b94ddc7cd5211
