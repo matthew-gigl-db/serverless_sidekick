@@ -7,4 +7,4 @@ use catalog serverless_sidekick;
 
 -- COMMAND ----------
 
-create schema if not exists dab_assist;
+-- create schema if not exists dab_assist;
