@@ -19,7 +19,7 @@ resources:
           # job_cluster_key: job_cluster
           notebook_task:
             notebook_path: ../src/setup/0-uc-setup.sql
-          warehouse_id: ${var.warehouse_id}
+            warehouse_id: ${var.warehouse_id}
           
         
       # job_clusters:

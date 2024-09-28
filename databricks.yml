@@ -28,6 +28,8 @@ targets:
     permissions:
       - user_name: matthew.giglia@databricks.com
         level: CAN_MANAGE
+      - user_name: emma.yamada@databricks.com
+        level: CAN_MANAGE
     run_as:
       user_name: matthew.giglia@databricks.com
     variables:  
