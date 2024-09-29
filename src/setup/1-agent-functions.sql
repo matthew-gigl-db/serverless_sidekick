@@ -198,7 +198,7 @@ RETURN (
 -- COMMAND ----------
 
 -- DBTITLE 1,Test the generate_yamls SQL UDF
-SELECT 
+SELECT * FROM 
   generate_yamls(
     "dlt_dropbox_test" --  workflow_name STRING
     ,"770567817966568" -- ,existing_job_ids STRING
