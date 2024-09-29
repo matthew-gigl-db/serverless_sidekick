@@ -45,10 +45,6 @@ USE serverless_sidekick.default;
 
 -- COMMAND ----------
 
-select map("existing_job_ids", "1, 2, 3", "existing_pipeline_ids", "a, b, c")
-
--- COMMAND ----------
-
 -- DBTITLE 1,Define run_notebook SQL UDF
 CREATE OR REPLACE FUNCTION run_notebook (notebook_path STRING, base_parameters MAP<STRING, STRING>, host STRING, token STRING)
 RETURNS STRUCT<
@@ -115,6 +111,7 @@ $$
 
 -- COMMAND ----------
 
+-- DBTITLE 1,Define generate_yamls SQL UDF
 CREATE OR REPLACE FUNCTION generate_yamls (workflow_name STRING, existing_job_ids STRING, existing_pipeline_ids STRING, workspace_file_path STRING, host STRING, secret_scope STRING, secret_databricks_pat STRING, token STRING)
 RETURNS TABLE (
   cleanup_duration INT,
