@@ -23,6 +23,7 @@ dbutils.widgets.text("workspace.file_path", spark.sql("select '/Workspace/Users/
 
 # COMMAND ----------
 
+# DBTITLE 1,Retrieve Parameter Inputs
 workspace_url = dbutils.widgets.get("workspace.host")
 db_pat = dbutils.secrets.get(scope=dbutils.widgets.get("secret_scope"), key=dbutils.widgets.get("secret_databricks_pat"))
 workspace_src_path = dbutils.widgets.get("workspace.file_path") + "/src/"
@@ -32,6 +33,7 @@ project = dbutils.widgets.get("workflow_name")
 
 # COMMAND ----------
 
+# DBTITLE 1,Print Parameter Inputs
 print(f"""
   workspace_url: {workspace_url}
   db_pat: {db_pat}
@@ -79,15 +81,18 @@ with open(f"{temp_directory}/dab_init_config.json", "w") as file:
 
 # COMMAND ----------
 
+# DBTITLE 1,Append Workspace Source to Path Variable
 import sys, os
 sys.path.append(os.path.abspath(workspace_src_path))
 
 # COMMAND ----------
 
+# DBTITLE 1,Import dabAssist
 import dabAssist
 
 # COMMAND ----------
 
+# DBTITLE 1,Initialize the Databricks CLI Class
 dc = dabAssist.databricksCli(
   workspace_url = workspace_url
   ,db_pat = db_pat
@@ -96,14 +101,17 @@ dc
 
 # COMMAND ----------
 
+# DBTITLE 1,Install the Databricks CLI
 dc.install()
 
 # COMMAND ----------
 
+# DBTITLE 1,Configure the Databricks CLI
 dc.configure().returncode
 
 # COMMAND ----------
 
+# DBTITLE 1,Initialize a dabAssist Class Object
 bundle = dabAssist.assetBundle(
   directory = temp_directory
   ,repo_url = ""  # note that repo URL is not used when its not known yet
@@ -114,6 +122,7 @@ bundle = dabAssist.assetBundle(
 
 # COMMAND ----------
 
+# DBTITLE 1,Intialize a Databricks Asset Bundle
 print(
   bundle.initialize(
     template = "default-python"
@@ -151,9 +160,8 @@ if len(existing_pipeline_ids) > 0 and existing_pipeline_ids != ['']:
 
 # COMMAND ----------
 
+# DBTITLE 1,List the Databricks Asset Bundle Files Generated
 import subprocess
-
-# COMMAND ----------
 
 cmd = f"ls -altR {temp_directory}"
 
@@ -162,7 +170,14 @@ print(result.stdout.decode("utf-8"))
 
 # COMMAND ----------
 
+# DBTITLE 1,Copy the Generated YAMLs to the Serverless Sidekick's original_yamls Volume
+cmd = f"mkdir /Volumes/serverless_sidekick/default/original_yamls/{project}/; cp -rf {temp_directory}/{project}/resources/* /Volumes/serverless_sidekick/default/original_yamls/{project}/"
+print(
+  f"cmd: {cmd}"
+)
 
+result = subprocess.run(cmd, shell=True, capture_output=True)
+print(result.stdout.decode("utf-8"))
 
 # COMMAND ----------
 
