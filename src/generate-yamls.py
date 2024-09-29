@@ -1,4 +1,12 @@
 # Databricks notebook source
+# MAGIC %md
+# MAGIC #### Example Inputs: 
+# MAGIC - **workflow_name**:  dlt_dropbox_job  
+# MAGIC - **existing_job_ids**: 770567817966568  
+# MAGIC - **existing_pipeline_ids**: 6d6c88e7-7abb-453c-968d-0f2f37ab4dce, de60c372-2efe-4697-8415-b3076d48b74f  
+
+# COMMAND ----------
+
 # DBTITLE 1,Databricks CLI Parameters
 dbutils.widgets.text("workspace.host", "https://e2-demo-field-eng.cloud.databricks.com/", "Workspace URL")
 dbutils.widgets.text("secret_scope", spark.sql("select replace(substring_index(current_user(), '@', 1), '.', '-')").collect()[0][0], "Secret Scope")
@@ -15,20 +23,22 @@ dbutils.widgets.text("workspace.file_path", spark.sql("select '/Workspace/Users/
 
 # COMMAND ----------
 
-workspace_host = dbutils.widgets.get("workspace.host")
+workspace_url = dbutils.widgets.get("workspace.host")
 db_pat = dbutils.secrets.get(scope=dbutils.widgets.get("secret_scope"), key=dbutils.widgets.get("secret_databricks_pat"))
 workspace_src_path = dbutils.widgets.get("workspace.file_path") + "/src/"
 existing_job_ids = dbutils.widgets.get("existing_job_ids")
 existing_pipeline_ids = dbutils.widgets.get("existing_pipeline_ids")
+project = dbutils.widgets.get("workflow_name")
 
 # COMMAND ----------
 
 print(f"""
-  workspace_host: {workspace_host}
+  workspace_url: {workspace_url}
   db_pat: {db_pat}
   workspace_src_path: {workspace_src_path}
   existing_job_ids: {existing_job_ids}
   existing_pipeline_ids: {existing_pipeline_ids}
+  workflow_name: {project}
 """)
 
 # COMMAND ----------
@@ -75,6 +85,84 @@ sys.path.append(os.path.abspath(workspace_src_path))
 # COMMAND ----------
 
 import dabAssist
+
+# COMMAND ----------
+
+dc = dabAssist.databricksCli(
+  workspace_url = workspace_url
+  ,db_pat = db_pat
+)
+dc
+
+# COMMAND ----------
+
+dc.install()
+
+# COMMAND ----------
+
+dc.configure().returncode
+
+# COMMAND ----------
+
+bundle = dabAssist.assetBundle(
+  directory = temp_directory
+  ,repo_url = ""  # note that repo URL is not used when its not known yet
+  ,project = project
+  ,cli_path = dc.cli_path
+  ,target = "dev"
+)
+
+# COMMAND ----------
+
+print(
+  bundle.initialize(
+    template = "default-python"
+    ,config_file = "dab_init_config.json"
+  )
+)
+
+# COMMAND ----------
+
+# DBTITLE 1,Generate YAMLs for Existing Jobs
+existing_job_ids = dbutils.widgets.get("existing_job_ids").split(",")
+
+if len(existing_job_ids) > 0 and existing_job_ids != ['']:
+  for i in existing_job_ids:
+    print(
+      bundle.generate_yaml(
+        existing_id = i.strip()
+        ,type = "job"
+      )
+    )
+
+# COMMAND ----------
+
+# DBTITLE 1,Generate YAMLs for Existing Pipelines
+existing_pipeline_ids = dbutils.widgets.get("existing_pipeline_ids").split(",")
+
+if len(existing_pipeline_ids) > 0 and existing_pipeline_ids != ['']:
+  for i in existing_pipeline_ids:
+    print(
+      bundle.generate_yaml(
+        existing_id = i.strip()
+        ,type = "pipeline"
+      )
+    )
+
+# COMMAND ----------
+
+import subprocess
+
+# COMMAND ----------
+
+cmd = f"ls -altR {temp_directory}"
+
+result = subprocess.run(cmd, shell=True, capture_output=True)
+print(result.stdout.decode("utf-8"))
+
+# COMMAND ----------
+
+
 
 # COMMAND ----------
 

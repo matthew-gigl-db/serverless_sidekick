@@ -71,9 +71,9 @@ class assetBundle:
     def generate_yaml(self, existing_id: str, type: str = "job"): 
       cmd = f"cd {self.bundle_path}; pwd; " 
       if type == "job": 
-        cmd += f"{self.cli_path} bundle generate job --existing-job-id {existing_id}"
+        cmd += f"{self.cli_path} bundle generate job --existing-job-id {existing_id} --force"
       elif type == "pipeline":
-        cmd += f"{self.cli_path} bundle generate pipeline --existing-pipeline-id {existing_id}"
+        cmd += f"{self.cli_path} bundle generate pipeline --existing-pipeline-id {existing_id} --force"
       else:
         raise ValueError(f"ERROR: {type} is not a valid type.  Please use 'job' or 'pipeline'")
       result = subprocess.run(cmd, shell=True, capture_output=True)
