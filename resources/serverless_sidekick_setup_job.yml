@@ -25,7 +25,19 @@ resources:
             warehouse_id: ${var.warehouse_id}
           depends_on: 0_uc_setup
           
-        
+      parameters:
+        - name: bundle.workspace.file_path
+          default: /Workspace${workspace.file_path}
+        - name: bundle.target
+          default: ${bundle.target}
+        - name: bundle.workspace.host
+          default: https://e2-demo-field-eng.cloud.databricks.com/
+        - name: bundle.secret_scope
+          default: matthew-giglia
+        - name: bundle.secret_databricks_pat
+          default: databricks_pat
+
+
       # job_clusters:
       #   - job_cluster_key: job_cluster
       #     new_cluster:
