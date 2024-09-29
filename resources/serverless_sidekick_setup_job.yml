@@ -20,6 +20,11 @@ resources:
           notebook_task:
             notebook_path: ../src/setup/0-uc-setup.sql
             warehouse_id: ${var.warehouse_id}
+        - task_key: 1-agent-functions
+          notebook_task:
+            notebook_path: ../src/setup/1-agent-functions.sql
+            warehouse_id: ${var.warehouse_id}
+          depends_on: 0_uc_setup
           
         
       # job_clusters:
