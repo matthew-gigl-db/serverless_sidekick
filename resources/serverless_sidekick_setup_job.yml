@@ -16,12 +16,29 @@ resources:
 
       tasks:
         - task_key: 0_uc_setup
-          # job_cluster_key: job_cluster
           notebook_task:
             notebook_path: ../src/setup/0-uc-setup.sql
             warehouse_id: ${var.warehouse_id}
+        - task_key: 1-agent-functions
+          notebook_task:
+            notebook_path: ../src/setup/1-agent-functions.sql
+            warehouse_id: ${var.warehouse_id}
+          depends_on:
+            - task_key: 0_uc_setup
           
-        
+      parameters:
+        - name: bundle.workspace.file_path
+          default: /Workspace${workspace.file_path}
+        - name: bundle.target
+          default: ${bundle.target}
+        - name: bundle.workspace.host
+          default: https://e2-demo-field-eng.cloud.databricks.com/
+        - name: bundle.secret_scope
+          default: matthew-giglia
+        - name: bundle.secret_databricks_pat
+          default: databricks_pat
+
+
       # job_clusters:
       #   - job_cluster_key: job_cluster
       #     new_cluster:
