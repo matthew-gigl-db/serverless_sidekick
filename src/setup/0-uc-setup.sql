@@ -3,7 +3,10 @@ create catalog if not exists serverless_sidekick;
 
 -- COMMAND ----------
 
-GRANT ALL PRIVILEGES ON CATALOG serverless_sidekick TO `emma.yamada@databricks.com`, `matthew.giglia@databricks.com`;
+-- DBTITLE 1,Grant Catalog Permissions to Serverless Sidekick SPN Group
+-- Note:  change to group instead of users
+GRANT ALL PRIVILEGES ON CATALOG serverless_sidekick TO `emma.yamada@databricks.com`;
+GRANT ALL PRIVILEGES ON CATALOG serverless_sidekick TO `matthew.giglia@databricks.com`;
 
 -- COMMAND ----------
 
