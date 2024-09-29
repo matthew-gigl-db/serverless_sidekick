@@ -1,6 +1,7 @@
 -- Databricks notebook source
 -- DBTITLE 1,Declare SQL Notebook Parameters
-DECLARE OR REPLACE VARIABLE workspace_src_path STRING DEFAULT '/Workspace/Users/' || current_user() || '/serverless_sidekick';
+DECLARE OR REPLACE VARIABLE workspace_file_path STRING DEFAULT '/Workspace/Users/' || current_user() || '/serverless_sidekick';
+DECLARE OR REPLACE VARIABLE workspace_src_path STRING DEFAULT workspace_file_path || '/src/';
 DECLARE OR REPLACE VARIABLE host STRING DEFAULT 'https://e2-demo-field-eng.cloud.databricks.com/';
 DECLARE OR REPLACE VARIABLE secret_scope STRING DEFAULT replace(substring_index(current_user(), "@", 1), ".", "-");
 DECLARE OR REPLACE VARIABLE secret_databricks_pat STRING DEFAULT 'databricks_pat';
@@ -9,7 +10,8 @@ DECLARE OR REPLACE VARIABLE secret_databricks_pat STRING DEFAULT 'databricks_pat
 
 -- DBTITLE 1,Display SQL Notebook Parameter Defaults
 SELECT
-  workspace_src_path
+  workspace_file_path
+  ,workspace_src_path
   ,host
   ,secret_scope
   ,secret_databricks_pat
@@ -20,13 +22,15 @@ SELECT
 -- COMMAND ----------
 
 -- DBTITLE 1,Set SQL Notebook Parameters
-SET VAR workspace_src_path = :`bundle.workspace.file_path` || '/src/';
+SET VAR workspace_file_path = :`bundle.workspace.file_path`;
+SET VAR workspace_src_path = workspace_file_path || '/src/';
 SET VAR host = :`bundle.workspace.host`;
 SET VAR secret_scope = :`bundle.secret_scope`;
 SET VAR secret_databricks_pat = :`bundle.secret_databricks_pat`;
 
 SELECT
-  workspace_src_path
+  workspace_file_path
+  ,workspace_src_path
   ,host
   ,secret_scope
   ,secret_databricks_pat
@@ -41,12 +45,55 @@ USE serverless_sidekick.default;
 
 -- COMMAND ----------
 
+select map("existing_job_ids", "1, 2, 3", "existing_pipeline_ids", "a, b, c")
+
+-- COMMAND ----------
+
 -- DBTITLE 1,Define run_notebook SQL UDF
 CREATE OR REPLACE FUNCTION run_notebook (notebook_path STRING, base_parameters MAP<STRING, STRING>, host STRING, token STRING)
-RETURNS STRING
+RETURNS STRUCT<
+  cleanup_duration BIGINT,
+  creator_user_name STRING,
+  end_time BIGINT,
+  execution_duration BIGINT,
+  job_id BIGINT,
+  number_in_job BIGINT,
+  run_id BIGINT,
+  run_name STRING,
+  run_page_url STRING,
+  run_type STRING,
+  setup_duration BIGINT,
+  start_time BIGINT,
+  state STRUCT<
+    life_cycle_state STRING,
+    result_state STRING,
+    state_message STRING,
+    user_cancelled_or_timedout BOOLEAN
+  >,
+  tasks ARRAY<STRUCT<
+    attempt_number BIGINT,
+    cleanup_duration BIGINT,
+    end_time BIGINT,
+    execution_duration BIGINT,
+    notebook_task STRUCT<
+      notebook_path STRING,
+      source STRING
+    >,
+    run_id BIGINT,
+    run_if STRING,
+    setup_duration BIGINT,
+    start_time BIGINT,
+    state STRUCT<
+      life_cycle_state STRING,
+      result_state STRING,
+      state_message STRING,
+      user_cancelled_or_timedout BOOLEAN
+    >,
+    task_key STRING
+  >>
+>
 LANGUAGE python
 AS $$ 
-
     from databricks.sdk import WorkspaceClient
     from databricks.sdk.service import jobs
     import time
@@ -64,16 +111,101 @@ AS $$
                         ]).result()
 
     return run.as_dict()
-
 $$
 
 -- COMMAND ----------
 
--- DBTITLE 1,Test the run_notebook SQL UDF
+CREATE OR REPLACE FUNCTION generate_yamls (workflow_name STRING, existing_job_ids STRING, existing_pipeline_ids STRING, workspace_file_path STRING, host STRING, secret_scope STRING, secret_databricks_pat STRING, token STRING)
+RETURNS TABLE (
+  cleanup_duration INT,
+  creator_user_name STRING,
+  end_time BIGINT,
+  execution_duration INT,
+  job_id BIGINT,
+  number_in_job BIGINT,
+  run_id BIGINT,
+  run_name STRING,
+  run_page_url STRING,
+  run_type STRING,
+  setup_duration INT,
+  start_time BIGINT,
+  state STRUCT<
+    life_cycle_state: STRING,
+    result_state: STRING,
+    state_message: STRING,
+    user_cancelled_or_timedout: BOOLEAN
+  >,
+  tasks ARRAY<STRUCT<
+    attempt_number: INT,
+    cleanup_duration: INT,
+    end_time: BIGINT,
+    execution_duration: INT,
+    notebook_task: STRUCT<
+      notebook_path: STRING,
+      source: STRING
+    >,
+    run_id: BIGINT,
+    run_if: STRING,
+    setup_duration: INT,
+    start_time: BIGINT,
+    state: STRUCT<
+      life_cycle_state: STRING,
+      result_state: STRING,
+      state_message: STRING,
+      user_cancelled_or_timedout: BOOLEAN
+    >,
+    task_key: STRING
+  >>
+)
+LANGUAGE SQL
+RETURN (
+  WITH run_notebook_results AS (
+    SELECT
+      run_notebook(
+        workspace_file_path || "/src/generate-yamls"
+        ,map(
+          "existing_job_ids", existing_job_ids
+          ,"existing_pipeline_ids", existing_pipeline_ids
+          ,"workflow_name", workflow_name
+          ,"workspace.host", host
+          ,"secret_scope", secret_scope
+          ,"secret_databricks_pat", secret_databricks_pat
+          ,"workspace.file_path", workspace_file_path
+        )
+        ,host
+        ,token
+      ) AS result
+  )
+  SELECT
+    result.cleanup_duration
+    ,result.creator_user_name
+    ,result.end_time
+    ,result.execution_duration
+    ,result.job_id
+    ,result.number_in_job
+    ,result.run_id
+    ,result.run_name
+    ,result.run_page_url
+    ,result.run_type
+    ,result.setup_duration
+    ,result.start_time
+    ,result.state
+    ,result.tasks
+  FROM 
+    run_notebook_results
+)
+
+-- COMMAND ----------
+
+-- DBTITLE 1,Test the generate_yamls SQL UDF
 SELECT 
-  run_notebook(
-    workspace_src_path || "generate-yamls"
-    ,map("existing_job_ids", "1, 2, 3")
-    ,host
-    ,secret(secret_scope, secret_databricks_pat)
+  generate_yamls(
+    "dlt_dropbox_test" --  workflow_name STRING
+    ,"770567817966568" -- ,existing_job_ids STRING
+    ,"6d6c88e7-7abb-453c-968d-0f2f37ab4dce, de60c372-2efe-4697-8415-b3076d48b74f" -- ,existing_pipeline_ids STRING
+    ,workspace_file_path-- ,workspace_file_path STRING
+    ,host -- ,host STRING
+    ,secret_scope -- ,secret_scope STRING
+    ,secret_databricks_pat -- ,secret_databricks_pat STRING
+    ,secret(secret_scope, secret_databricks_pat) -- ,token STRING
   )
