@@ -195,14 +195,58 @@ RETURN (
 -- COMMAND ----------
 
 -- DBTITLE 1,Test the generate_yamls SQL UDF
-SELECT * FROM 
-  generate_yamls(
-    "dlt_dropbox_test" --  workflow_name STRING
-    ,"770567817966568" -- ,existing_job_ids STRING
-    ,"6d6c88e7-7abb-453c-968d-0f2f37ab4dce, de60c372-2efe-4697-8415-b3076d48b74f" -- ,existing_pipeline_ids STRING
-    ,workspace_file_path-- ,workspace_file_path STRING
-    ,host -- ,host STRING
-    ,secret_scope -- ,secret_scope STRING
-    ,secret_databricks_pat -- ,secret_databricks_pat STRING
-    ,secret(secret_scope, secret_databricks_pat) -- ,token STRING
-  )
+-- SELECT * FROM 
+--   generate_yamls(
+--     "dlt_dropbox_test" --  workflow_name STRING
+--     ,"770567817966568" -- ,existing_job_ids STRING
+--     ,"6d6c88e7-7abb-453c-968d-0f2f37ab4dce, de60c372-2efe-4697-8415-b3076d48b74f" -- ,existing_pipeline_ids STRING
+--     ,workspace_file_path-- ,workspace_file_path STRING
+--     ,host -- ,host STRING
+--     ,secret_scope -- ,secret_scope STRING
+--     ,secret_databricks_pat -- ,secret_databricks_pat STRING
+--     ,secret(secret_scope, secret_databricks_pat) -- ,token STRING
+--   )
+
+-- COMMAND ----------
+
+with job_or_dlt_usage as (
+  SELECT 
+    account_id
+    ,workspace_id
+    ,sku_name
+    ,usage_metadata.job_id as job_id
+    ,usage_metadata.dlt_pipeline_id as dlt_pipeline_id
+    ,product_features.is_serverless as is_serverless
+    ,usage_unit
+    ,sum(usage_quantity) as total_usage_quantity
+  FROM
+    system.billing.usage
+  WHERE
+    usage_date >= current_date() - INTERVAL 7 DAY
+    AND (usage_metadata.job_id is not null OR usage_metadata.dlt_pipeline_id is not null)
+  GROUP BY
+    account_id
+    ,workspace_id
+    ,sku_name
+    ,usage_metadata.job_id
+    ,usage_metadata.dlt_pipeline_id
+    ,product_features.is_serverless
+    ,usage_unit
+)
+SELECT 
+  t1.*
+  ,t2.name as job_name
+  ,t2.description as job_description
+FROM
+  job_or_dlt_usage t1 LEFT OUTER JOIN system.lakeflow.jobs t2 
+    ON t1.account_id = t2.account_id AND t1.workspace_id = t2.workspace_id AND t1.job_id = t2.job_id
+ORDER by
+  t1.total_usage_quantity DESC
+
+
+-- COMMAND ----------
+
+CREATE OR REPLACE FUNCTION non_serverless_jobs ()
+RETURNS TABLE (
+  
+)
