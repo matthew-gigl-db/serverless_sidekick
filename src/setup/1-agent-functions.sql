@@ -26,7 +26,7 @@ SET VAR workspace_file_path = :`bundle.workspace.file_path`;
 SET VAR workspace_src_path = workspace_file_path || '/src/';
 SET VAR host = :`bundle.workspace.host`;
 SET VAR secret_scope = :`bundle.secret_scope`;
-SET VAR secret_databricks_pat = :`bundle.secret_databricks_pat`; 
+SET VAR secret_databricks_pat = :`bundle.secret_databricks_pat`;
 
 SELECT
   workspace_file_path
@@ -46,13 +46,18 @@ USE serverless_sidekick.default;
 -- COMMAND ----------
 
 -- DBTITLE 1,Define run_notebook SQL UDF
-CREATE OR REPLACE FUNCTION run_notebook (notebook_path STRING, base_parameters MAP<STRING, STRING>, host STRING, token STRING)
+CREATE OR REPLACE FUNCTION run_notebook (
+  notebook_path STRING COMMENT "The path to the notebook to run in the Databricks Workspace."
+  ,base_parameters MAP<STRING, STRING> COMMENT "The parameters to pass to the notebook in the form a dictionary or JSON structure."
+  ,host STRING COMMENT "The Databricks workspace HOST URL where the notebook will be run. This is used to authenticate the Databricks Python SDK's Workspace Client."
+  ,token STRING COMMENT "The Databricks Personal Access Token used to authenticate the Databricks Python SDK's Workspace Client."
+)
 RETURNS STRUCT<
   cleanup_duration BIGINT,
   creator_user_name STRING,
   end_time BIGINT,
   execution_duration BIGINT,
-  job_id BIGINT,
+  job_id BIGINT COMMENT "The Databricks job ID of the run.",
   number_in_job BIGINT,
   run_id BIGINT,
   run_name STRING,
@@ -89,6 +94,7 @@ RETURNS STRUCT<
   >>
 >
 LANGUAGE python
+COMMENT "This function runs a Databricks notebook and returns the results of the run as a struct."
 AS $$ 
     from databricks.sdk import WorkspaceClient
     from databricks.sdk.service import jobs
@@ -112,7 +118,15 @@ $$
 -- COMMAND ----------
 
 -- DBTITLE 1,Define generate_yamls SQL UDF
-CREATE OR REPLACE FUNCTION generate_yamls (workflow_name STRING, existing_job_ids STRING, existing_pipeline_ids STRING, workspace_file_path STRING, host STRING, secret_scope STRING, secret_databricks_pat STRING, token STRING)
+CREATE OR REPLACE FUNCTION generate_yamls (
+  workflow_name STRING COMMENT "The name of the workflow to generate YAML files for."
+  ,existing_job_ids STRING COMMENT "A comma-separated list of existing job IDs to generate YAML files for."
+  ,existing_pipeline_ids STRING COMMENT "A comma-separated list of existing pipeline ids to generate YAML files for."
+  ,workspace_file_path STRING COMMENT "The path to the workspace files that contain the notebooks, classes, and methods needed to run the '/src/generate-yamls' notebook effectively."
+  ,host STRING COMMENT "The Databricks workspace HOST URL where the notebook will be run. This is used to authenticate the Databricks Python SDK's Workspace Client in the run_notebook function."
+  ,secret_scope STRING COMMENT "The name of the secret scope that contains the Databricks PAT."
+  ,secret_databricks_pat STRING COMMENT "The name of the ket in the secret scope that contains the Databricks PAT."
+  ,token STRING COMMENT "The Databricks Personal Access Token used to authenticate the Databricks Python SDK's Workspace Client in the run_notebook function.")
 RETURNS TABLE(
   cleanup_duration INT,
   creator_user_name STRING,
