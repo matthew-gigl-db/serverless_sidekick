@@ -40,7 +40,7 @@ SELECT
 
 -- COMMAND ----------
 
--- DBTITLE 1,Use Serverless Sidekick Catalog  with Default Schema
+-- DBTITLE 1,Use Serverless Sidekick Catalog with Default Schema
 USE serverless_sidekick.default;
 
 -- COMMAND ----------
@@ -324,7 +324,20 @@ RETURN
   ORDER by
     t1.total_usage_quantity DESC
 
-
 -- COMMAND ----------
 
 SELECT * FROM non_serverless_jobs()
+
+-- COMMAND ----------
+
+-- DBTITLE 1,define the migration_confirmation SQL UDF
+CREATE OR REPLACE FUNCTION migration_confirmation()
+RETURNS STRING
+LANGUAGE PYTHON
+COMMENT 'This function requests the user to confirm the migration'
+AS
+$$
+print("Serverless Sidekick can migrate these workloads in development environments; please type 'generate test' to confirm you are ready to migrate")
+$$;
+
+-- COMMAND ----------
