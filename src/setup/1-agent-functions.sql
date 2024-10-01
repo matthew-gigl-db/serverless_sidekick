@@ -26,7 +26,7 @@ SET VAR workspace_file_path = :`bundle.workspace.file_path`;
 SET VAR workspace_src_path = workspace_file_path || '/src/';
 SET VAR host = :`bundle.workspace.host`;
 SET VAR secret_scope = :`bundle.secret_scope`;
-SET VAR secret_databricks_pat = :`bundle.secret_databricks_pat`; 
+SET VAR secret_databricks_pat = :`bundle.secret_databricks_pat`;
 
 SELECT
   workspace_file_path
@@ -46,7 +46,12 @@ USE serverless_sidekick.default;
 -- COMMAND ----------
 
 -- DBTITLE 1,Define run_notebook SQL UDF
-CREATE OR REPLACE FUNCTION run_notebook (notebook_path STRING, base_parameters MAP<STRING, STRING>, host STRING, token STRING)
+CREATE OR REPLACE FUNCTION run_notebook (
+  notebook_path STRING COMMENT "The path to the notebook to run in the Databricks Workspace."
+  ,base_parameters MAP<STRING, STRING> COMMENT "The parameters to pass to the notebook in the form a dictionary or JSON structure."
+  ,host STRING COMMENT "The Databricks workspace HOST URL where the notebook will be run. This is used to authenticate the Databricks Python SDK's Workspace Client."
+  ,token STRING "The Databricks Personal Access Token used to authenticate the Databricks Python SDK's Workspace Client."
+)
 RETURNS STRUCT<
   cleanup_duration BIGINT,
   creator_user_name STRING,
@@ -89,6 +94,7 @@ RETURNS STRUCT<
   >>
 >
 LANGUAGE python
+COMMENT "This function runs a Databricks notebook and returns the results of the run as a struct."
 AS $$ 
     from databricks.sdk import WorkspaceClient
     from databricks.sdk.service import jobs
