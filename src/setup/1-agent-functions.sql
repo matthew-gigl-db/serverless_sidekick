@@ -113,7 +113,7 @@ $$
 
 -- DBTITLE 1,Define generate_yamls SQL UDF
 CREATE OR REPLACE FUNCTION generate_yamls (workflow_name STRING, existing_job_ids STRING, existing_pipeline_ids STRING, workspace_file_path STRING, host STRING, secret_scope STRING, secret_databricks_pat STRING, token STRING)
-RETURNS TABLE (
+RETURNS TABLE(
   cleanup_duration INT,
   creator_user_name STRING,
   end_time BIGINT,
@@ -155,6 +155,7 @@ RETURNS TABLE (
   >>
 )
 LANGUAGE SQL
+COMMENT 'This function generates YAML files for non-serverless jobs identified as candidates for migration. The results of this function are depended on by the update_yamls function.'
 RETURN (
   WITH run_notebook_results AS (
     SELECT
@@ -261,6 +262,7 @@ WHERE rn = 1
 
 -- COMMAND ----------
 
+-- DBTITLE 1,define the non_serverless_jobs SQL UDF
 CREATE OR REPLACE FUNCTION non_serverless_jobs ()
 RETURNS TABLE (
   job_name STRING
@@ -274,6 +276,7 @@ RETURNS TABLE (
   ,total_usage_quantity DOUBLE
 )
 LANGUAGE SQL
+COMMENT 'Returns a table of non-serverless jobs and their usage to determine the top candidates for migration. After summarizing the results this function should always present the user with a request to confirm the migration, otherwise know as, migration confirmation.'
 RETURN 
   with job_usage_totals as (
     SELECT 
@@ -326,18 +329,57 @@ RETURN
 
 -- COMMAND ----------
 
-SELECT * FROM non_serverless_jobs()
-
--- COMMAND ----------
-
 -- DBTITLE 1,define the migration_confirmation SQL UDF
 CREATE OR REPLACE FUNCTION migration_confirmation()
 RETURNS STRING
 LANGUAGE PYTHON
-COMMENT 'This function requests the user to confirm the migration'
+COMMENT 'This function requests the user to confirm the migration.'
 AS
 $$
-print("Serverless Sidekick can migrate these workloads in development environments; please type 'generate test' to confirm you are ready to migrate")
+print("Serverless Sidekick can migrate these workloads in development environments; please type 'generate yamls' to confirm you are ready to migrate")
 $$;
 
 -- COMMAND ----------
+
+-- DBTITLE 1,define the update_yamls SQL UDF
+CREATE OR REPLACE FUNCTION update_yamls(input_dir STRING, output_dir STRING)
+RETURNS STRING
+LANGUAGE PYTHON
+COMMENT 'This function updates the generated YAML files with the appropriate changes to support serverless compute. These updated YAML files can be used in DABs to migrate workloads to serverless compute.'
+AS
+$$
+import yaml
+import os
+
+if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
+
+for root, _, files in os.walk(input_dir):
+    for filename in files:
+        if filename.endswith('.yml'):
+            input_file_path = os.path.join(root, filename)
+            relative_path = os.path.relpath(input_file_path, input_dir)
+            output_file_path = os.path.join(output_dir, relative_path)
+            output_file_dir = os.path.dirname(output_file_path)
+            
+            if not os.path.exists(output_file_dir):
+                os.makedirs(output_file_dir)
+            
+            with open(input_file_path, 'r') as file:
+                data = yaml.safe_load(file)
+            
+            if 'resources' in data and 'jobs' in data['resources']:
+                for job in data['resources']['jobs'].values():
+                    if 'job_clusters' in job:
+                        del job['job_clusters']
+
+            if 'resources' in data and 'pipelines' in data['resources']:
+                for pipeline in data['resources']['pipelines'].values():
+                    if 'clusters' in pipeline:
+                        del pipeline['clusters']
+            
+            with open(output_file_path, 'w') as file:
+                yaml.dump(data, file)
+
+return "Updates to YAML files successful! These updated YAMLs can now be used in your DABs to migrate your workloads to serverless compute."
+$$;
