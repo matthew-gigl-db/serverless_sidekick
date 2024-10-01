@@ -26,7 +26,7 @@ SET VAR workspace_file_path = :`bundle.workspace.file_path`;
 SET VAR workspace_src_path = workspace_file_path || '/src/';
 SET VAR host = :`bundle.workspace.host`;
 SET VAR secret_scope = :`bundle.secret_scope`;
-SET VAR secret_databricks_pat = :`bundle.secret_databricks_pat`;
+SET VAR secret_databricks_pat = :`bundle.secret_databricks_pat`; 
 
 SELECT
   workspace_file_path
@@ -195,17 +195,138 @@ RETURN (
 -- COMMAND ----------
 
 -- DBTITLE 1,Test the generate_yamls SQL UDF
-SELECT * FROM 
-  generate_yamls(
-    "dlt_dropbox_test" --  workflow_name STRING
-    ,"770567817966568" -- ,existing_job_ids STRING
-    ,"6d6c88e7-7abb-453c-968d-0f2f37ab4dce, de60c372-2efe-4697-8415-b3076d48b74f" -- ,existing_pipeline_ids STRING
-    ,workspace_file_path-- ,workspace_file_path STRING
-    ,host -- ,host STRING
-    ,secret_scope -- ,secret_scope STRING
-    ,secret_databricks_pat -- ,secret_databricks_pat STRING
-    ,secret(secret_scope, secret_databricks_pat) -- ,token STRING
+-- SELECT * FROM 
+--   generate_yamls(
+--     "dlt_dropbox_test" --  workflow_name STRING
+--     ,"770567817966568" -- ,existing_job_ids STRING
+--     ,"6d6c88e7-7abb-453c-968d-0f2f37ab4dce, de60c372-2efe-4697-8415-b3076d48b74f" -- ,existing_pipeline_ids STRING
+--     ,workspace_file_path-- ,workspace_file_path STRING
+--     ,host -- ,host STRING
+--     ,secret_scope -- ,secret_scope STRING
+--     ,secret_databricks_pat -- ,secret_databricks_pat STRING
+--     ,secret(secret_scope, secret_databricks_pat) -- ,token STRING
+--   )
+
+-- COMMAND ----------
+
+with job_usage_totals as (
+  SELECT 
+    account_id
+    ,workspace_id
+    ,sku_name
+    ,usage_metadata
+    ,usage_metadata.job_id as job_id
+    ,product_features.is_serverless as is_serverless
+    ,usage_unit
+    ,sum(usage_quantity) as total_usage_quantity
+  FROM
+    system.billing.usage
+  WHERE
+    usage_date >= current_date() - INTERVAL 7 DAY
+    AND usage_metadata.job_id is not null
+    and product_features.is_serverless = false
+  GROUP BY
+    account_id
+    ,workspace_id
+    ,sku_name
+    ,usage_metadata
+    ,usage_metadata.job_id
+    ,product_features.is_serverless
+    ,usage_unit
+)
+SELECT distinct
+  t1.*
+  ,t2.name as job_name
+  ,t2.description as job_description
+FROM
+  job_usage_totals t1 inner join system.lakeflow.jobs t2 
+    ON t1.account_id = t2.account_id AND t1.workspace_id = t2.workspace_id AND t1.job_id = t2.job_id
+ORDER by
+  t1.total_usage_quantity DESC
+
+
+-- COMMAND ----------
+
+SELECT
+  account_id,
+  workspace_id,
+  job_id,
+  name as job_name
+FROM (
+  SELECT *,
+    ROW_NUMBER() OVER(PARTITION BY account_id, workspace_id, job_id ORDER BY change_time DESC) as rn
+  FROM system.lakeflow.jobs
+)
+WHERE rn = 1
+
+-- COMMAND ----------
+
+CREATE OR REPLACE FUNCTION non_serverless_jobs ()
+RETURNS TABLE (
+  job_name STRING
+  ,job_description STRING
+  ,account_id STRING
+  ,workspace_id STRING
+  ,sku_name STRING
+  ,job_id STRING
+  ,is_serverless BOOLEAN
+  ,usage_unit STRING
+  ,total_usage_quantity DOUBLE
+)
+LANGUAGE SQL
+RETURN 
+  with job_usage_totals as (
+    SELECT 
+      account_id
+      ,workspace_id
+      ,sku_name
+      ,usage_metadata.job_id as job_id
+      ,product_features.is_serverless as is_serverless
+      ,usage_unit
+      ,sum(usage_quantity) as total_usage_quantity
+    FROM
+      system.billing.usage
+    WHERE
+      usage_date >= current_date() - INTERVAL 7 DAY
+      AND usage_metadata.job_id is not null
+      and product_features.is_serverless = false
+    GROUP BY
+      account_id
+      ,workspace_id
+      ,sku_name
+      ,usage_metadata.job_id
+      ,product_features.is_serverless
+      ,usage_unit
   )
+  ,distinct_job_header AS (
+    SELECT
+      account_id
+      ,workspace_id
+      ,job_id
+      ,name as job_name
+      ,description as job_description
+    FROM (
+      SELECT *,
+        ROW_NUMBER() OVER(PARTITION BY account_id, workspace_id, job_id ORDER BY change_time DESC) as rn
+      FROM system.lakeflow.jobs
+    )
+    WHERE rn = 1
+  )
+  SELECT distinct
+    t2.job_name
+    ,t2.job_description
+    ,t1.*
+  FROM
+    job_usage_totals t1
+    ,distinct_job_header t2 
+  WHERE 
+    t1.account_id = t2.account_id AND t1.workspace_id = t2.workspace_id AND t1.job_id = t2.job_id
+  ORDER by
+    t1.total_usage_quantity DESC
+
+-- COMMAND ----------
+
+SELECT * FROM non_serverless_jobs()
 
 -- COMMAND ----------
 
@@ -218,3 +339,5 @@ AS
 $$
 print("Serverless Sidekick can migrate these workloads in development environments; please type 'generate test' to confirm you are ready to migrate")
 $$;
+
+-- COMMAND ----------
