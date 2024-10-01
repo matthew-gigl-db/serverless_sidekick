@@ -26,7 +26,7 @@ SET VAR workspace_file_path = :`bundle.workspace.file_path`;
 SET VAR workspace_src_path = workspace_file_path || '/src/';
 SET VAR host = :`bundle.workspace.host`;
 SET VAR secret_scope = :`bundle.secret_scope`;
-SET VAR secret_databricks_pat = :`bundle.secret_databricks_pat`;
+SET VAR secret_databricks_pat = :`bundle.secret_databricks_pat`; 
 
 SELECT
   workspace_file_path
@@ -209,13 +209,13 @@ RETURN (
 
 -- COMMAND ----------
 
-with job_or_dlt_usage as (
+with job_usage_totals as (
   SELECT 
     account_id
     ,workspace_id
     ,sku_name
+    ,usage_metadata
     ,usage_metadata.job_id as job_id
-    ,usage_metadata.dlt_pipeline_id as dlt_pipeline_id
     ,product_features.is_serverless as is_serverless
     ,usage_unit
     ,sum(usage_quantity) as total_usage_quantity
@@ -223,22 +223,23 @@ with job_or_dlt_usage as (
     system.billing.usage
   WHERE
     usage_date >= current_date() - INTERVAL 7 DAY
-    AND (usage_metadata.job_id is not null OR usage_metadata.dlt_pipeline_id is not null)
+    AND usage_metadata.job_id is not null
+    and product_features.is_serverless = false
   GROUP BY
     account_id
     ,workspace_id
     ,sku_name
+    ,usage_metadata
     ,usage_metadata.job_id
-    ,usage_metadata.dlt_pipeline_id
     ,product_features.is_serverless
     ,usage_unit
 )
-SELECT 
+SELECT distinct
   t1.*
   ,t2.name as job_name
   ,t2.description as job_description
 FROM
-  job_or_dlt_usage t1 LEFT OUTER JOIN system.lakeflow.jobs t2 
+  job_usage_totals t1 inner join system.lakeflow.jobs t2 
     ON t1.account_id = t2.account_id AND t1.workspace_id = t2.workspace_id AND t1.job_id = t2.job_id
 ORDER by
   t1.total_usage_quantity DESC
@@ -246,7 +247,84 @@ ORDER by
 
 -- COMMAND ----------
 
+SELECT
+  account_id,
+  workspace_id,
+  job_id,
+  name as job_name
+FROM (
+  SELECT *,
+    ROW_NUMBER() OVER(PARTITION BY account_id, workspace_id, job_id ORDER BY change_time DESC) as rn
+  FROM system.lakeflow.jobs
+)
+WHERE rn = 1
+
+-- COMMAND ----------
+
 CREATE OR REPLACE FUNCTION non_serverless_jobs ()
 RETURNS TABLE (
-  
+  job_name STRING
+  ,job_description STRING
+  ,account_id STRING
+  ,workspace_id STRING
+  ,sku_name STRING
+  ,job_id STRING
+  ,is_serverless BOOLEAN
+  ,usage_unit STRING
+  ,total_usage_quantity DOUBLE
 )
+LANGUAGE SQL
+RETURN 
+  with job_usage_totals as (
+    SELECT 
+      account_id
+      ,workspace_id
+      ,sku_name
+      ,usage_metadata.job_id as job_id
+      ,product_features.is_serverless as is_serverless
+      ,usage_unit
+      ,sum(usage_quantity) as total_usage_quantity
+    FROM
+      system.billing.usage
+    WHERE
+      usage_date >= current_date() - INTERVAL 7 DAY
+      AND usage_metadata.job_id is not null
+      and product_features.is_serverless = false
+    GROUP BY
+      account_id
+      ,workspace_id
+      ,sku_name
+      ,usage_metadata.job_id
+      ,product_features.is_serverless
+      ,usage_unit
+  )
+  ,distinct_job_header AS (
+    SELECT
+      account_id
+      ,workspace_id
+      ,job_id
+      ,name as job_name
+      ,description as job_description
+    FROM (
+      SELECT *,
+        ROW_NUMBER() OVER(PARTITION BY account_id, workspace_id, job_id ORDER BY change_time DESC) as rn
+      FROM system.lakeflow.jobs
+    )
+    WHERE rn = 1
+  )
+  SELECT distinct
+    t2.job_name
+    ,t2.job_description
+    ,t1.*
+  FROM
+    job_usage_totals t1
+    ,distinct_job_header t2 
+  WHERE 
+    t1.account_id = t2.account_id AND t1.workspace_id = t2.workspace_id AND t1.job_id = t2.job_id
+  ORDER by
+    t1.total_usage_quantity DESC
+
+
+-- COMMAND ----------
+
+SELECT * FROM non_serverless_jobs()
